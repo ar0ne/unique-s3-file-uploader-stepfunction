@@ -15,7 +15,7 @@ def lambda_handler(event, context) -> dict[str, Any]:
 
     copy_source = {
         'Bucket': event['bucket'],
-        'Key': event['filename'],
+        'Key': event['key'],
     }
 
     bucket = s3.Bucket(copy_to_bucket)

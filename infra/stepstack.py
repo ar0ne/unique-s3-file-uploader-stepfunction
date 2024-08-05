@@ -39,6 +39,11 @@ class StepMachineStack(Stack):
             actions=["s3:GetObject"],
             resources=[s3_bucket.bucket_arn + "/*"],
         )
+        list_user_s3_bucket_policy = iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:ListBucket"],
+            resources=[s3_bucket.bucket_arn]
+        )
         write_to_gallery_s3_bucket_policy = iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:PutObject"],
@@ -84,6 +89,7 @@ class StepMachineStack(Stack):
         )
 
         get_hash_function.add_to_role_policy(read_from_user_s3_bucket_policy)
+        get_hash_function.add_to_role_policy(list_user_s3_bucket_policy)
         delete_object_from_s3_function.add_to_role_policy(delete_from_s3_bucket_policy)
         copy_file_to_s3_gallery_function.add_to_role_policy(
             read_from_user_s3_bucket_policy
