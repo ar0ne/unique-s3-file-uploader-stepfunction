@@ -4,10 +4,15 @@ logger = logging.getLogger(__name__)
 
 
 def lambda_handler(event, context):
-    logger.info("Hello from record handler")
+    logger.info("Create new record in DB and check if file hash exists in table")
+
+    # check if file hash exists in Table "Records"
+    exists = False
+    # create and save new record
+    # Record(user_id=..., file=..., folder=..., created_at=now(),)
+
     return {
-        "hash": "abc1234",
-        "id": 12,
-        "exists": True,
+        **event,
+        "exists": exists
     }
 

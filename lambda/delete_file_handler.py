@@ -1,11 +1,17 @@
 import logging
+import boto3
 
 logger = logging.getLogger(__name__)
 
+s3 = boto3.client("s3")
 
-def lambda_handler(event, context):
-    logger.info("Delete file from S3 user bucket")
+
+def lambda_handler(event, context) -> dict[str, str]:
+    logger.info("Delete file from user's S3 bucket")
+
+    s3.delete_object(Bucket=event['bucket'], Key=event['filename'])
+
     return {
-        "hash": "abc1234",
+        **event,
         "deleted": True
     }

@@ -5,10 +5,10 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     aws_s3,
-    aws_s3_notifications,
-    aws_sqs,
     aws_events,
+    aws_iam as iam,
     aws_events_targets,
+    RemovalPolicy,
 )
 from constructs import Construct
 
@@ -21,17 +21,38 @@ class StepMachineStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        s3_bucket = aws_s3.Bucket(self, "s3bucket", event_bridge_enabled=True)
+        # TODO: it's temporary bucket, but we need to determine 'user_id' and 'folder'.
+        s3_bucket = aws_s3.Bucket(
+            self,
+            "s3bucket",
+            event_bridge_enabled=True,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
 
-        # event_queue = aws_sqs.Queue(self, "EventQueue")
+        # general warehouse for files
+        gallery_s3_bucket = aws_s3.Bucket(
+            self, "gallerybucket", removal_policy=RemovalPolicy.DESTROY
+        )
 
-        # notification = aws_s3_notifications.SqsDestination(event_queue)
-        #
-        # s3_bucket.add_event_notification(aws_s3.EventType.OBJECT_CREATED, notification)
+        read_from_user_s3_bucket_policy = iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:GetObject"],
+            resources=[s3_bucket.bucket_arn + "/*"],
+        )
+        write_to_gallery_s3_bucket_policy = iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:PutObject"],
+            resources=[gallery_s3_bucket.bucket_arn + "/*"],
+        )
+        delete_from_s3_bucket_policy = iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:DeleteObject"],
+            resources=[s3_bucket.bucket_arn + "/*"],
+        )
 
         get_hash_function = lambda_.Function(
             self,
-            "GetHashFunction",
+            "gethashfunction",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="hash_handler.lambda_handler",
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
@@ -42,6 +63,7 @@ class StepMachineStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="record_handler.lambda_handler",
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
+            environment={"TABLE_NAME": "Records"},  # TODO
         )
         delete_object_from_s3_function = lambda_.Function(
             self,
@@ -56,6 +78,18 @@ class StepMachineStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="copy_file_handler.lambda_handler",
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
+            environment={
+                "COPY_TO_BUCKET": gallery_s3_bucket.bucket_name,
+            },
+        )
+
+        get_hash_function.add_to_role_policy(read_from_user_s3_bucket_policy)
+        delete_object_from_s3_function.add_to_role_policy(delete_from_s3_bucket_policy)
+        copy_file_to_s3_gallery_function.add_to_role_policy(
+            read_from_user_s3_bucket_policy
+        )
+        copy_file_to_s3_gallery_function.add_to_role_policy(
+            write_to_gallery_s3_bucket_policy
         )
 
         file_uploaded = tasks.LambdaInvoke(
@@ -110,4 +144,3 @@ class StepMachineStack(Stack):
             ),
             targets=[aws_events_targets.SfnStateMachine(state_machine)],
         )
-
