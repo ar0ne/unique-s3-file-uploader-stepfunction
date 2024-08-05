@@ -3,11 +3,12 @@ import os
 
 import aws_cdk as cdk
 
-from step.stepstack import UniqueS3FileStepFunctionStack
+from infra.stepstack import StepMachineStack
+from infra.dbstack import DatabaseStack
 
 
 app = cdk.App()
-UniqueS3FileStepFunctionStack(app, "UniqueS3FileStepFunctionStack",
-)
+StepMachineStack(app, "StepMachineStack")
+DatabaseStack(app, "DatabaseStack")
 
 app.synth()
