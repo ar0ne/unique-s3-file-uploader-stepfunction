@@ -4,7 +4,6 @@ from aws_cdk import (
     CustomResource,
     Duration,
     Stack,
-    SecretValue,
     aws_ec2 as ec2,
     aws_rds as rds,
     aws_iam as iam,
@@ -69,7 +68,7 @@ class DatabaseStack(Stack):
                 instance_type=ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE)
             ),
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_NAT
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
             security_groups=[db_sg],
         )
@@ -85,8 +84,9 @@ class DatabaseStack(Stack):
             secrets=[rds_secret],
             vpc=vpc,
             role=proxy_role,
-            iam_auth=True,
-            require_tls=True,
+            security_groups=[db_sg],
+            iam_auth=False,
+            require_tls=False,
         )
 
         lambda_sg = ec2.SecurityGroup(
@@ -127,12 +127,16 @@ class DatabaseStack(Stack):
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
             timeout=Duration.seconds(30),
             environment={
-                "ENDPOINT": proxy.endpoint,
+                "DB_HOST": proxy.endpoint,
                 "DB_USER": DB_USER,
                 "DB_NAME": DB_NAME,
                 "DB_PORT": str(DB_PORT),
-                "REGION": self.region,
+                "DB_PASSWORD": rds_secret.secret_value_from_json("password").unsafe_unwrap()  # TODO: call SM in lambda instead
             },
+            vpc=vpc,
+            role=lambda_role,
+            security_groups=[lambda_sg],
+            memory_size=128,
         )
 
         provider = cr.Provider(self, "DBInitProvider", on_event_handler=db_init_function)
