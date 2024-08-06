@@ -29,6 +29,7 @@ def lambda_handler(event, context) -> dict[str, Any]:
     digest = h.hexdigest()
 
     return {
+        "user_id": 10001,  # TODO: should come from bucket name or metadata
         "key": key,
         "filename": filename,
         "folder": folder,

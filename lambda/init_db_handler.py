@@ -35,11 +35,11 @@ def lambda_handler(event, context) -> None:
         connection.commit()
 
         # TODO: remove it!
-        with connection.cursor() as cursor:
-            sql = "SELECT `user_id`, `name`, `created_at` FROM `users`"
-            cursor.execute(sql)
-            result = cursor.fetchall()
-            log.warning(result)
+        # with connection.cursor() as cursor:
+        #     sql = "SELECT `user_id`, `name`, `created_at` FROM `users`"
+        #     cursor.execute(sql)
+        #     result = cursor.fetchall()
+        #     log.warning(result)
         
 
     log.info("DB Init completed")
