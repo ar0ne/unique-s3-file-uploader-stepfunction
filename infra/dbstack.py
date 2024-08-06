@@ -61,7 +61,7 @@ class DatabaseStack(Stack):
             credentials=rds.Credentials.from_secret(rds_secret),
             default_database_name="myapp",
             readers=[
-                rds.ClusterInstance.provisioned("reader1", promotion_tier=1),
+                # rds.ClusterInstance.provisioned("reader1", promotion_tier=1),
                 rds.ClusterInstance.serverless_v2("reader2"),
             ],
             writer=rds.ClusterInstance.provisioned("writer",
@@ -142,8 +142,14 @@ class DatabaseStack(Stack):
         provider = cr.Provider(self, "DBInitProvider", on_event_handler=db_init_function)
 
         resource = CustomResource(self, "DBInitCustomResource", service_token=provider.service_token, resource_type="Custom::InitDBProvider", properties={
-            "sql_script": ""
+            "sql_script": "" # TODO: should I hardcode path to file or provide/read in stack definition
         })
         resource.node.add_dependency(proxy)
 
-
+        self.db_host = proxy.endpoint
+        self.db_user = DB_USER
+        self.db_port = str(DB_PORT)
+        self.db_password = rds_secret.secret_value_from_json("password").unsafe_unwrap()  # TODO: call SM in lambda instead
+        self.db_name = DB_NAME
+        self.lambda_sg = lambda_sg
+        self.vpc = vpc

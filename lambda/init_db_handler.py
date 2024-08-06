@@ -12,6 +12,7 @@ dirname = os.path.dirname(__file__)
 def lambda_handler(event, context) -> None:
     log.info("Init DB lambda handler")
 
+    # TODO: get DB password from SM 
     connection = pymysql.connect(host=os.environ["DB_HOST"],
                              user=os.environ["DB_USER"],
                              password=os.environ["DB_PASSWORD"],
@@ -33,6 +34,7 @@ def lambda_handler(event, context) -> None:
         
         connection.commit()
 
+        # TODO: remove it!
         with connection.cursor() as cursor:
             sql = "SELECT `user_id`, `name`, `created_at` FROM `users`"
             cursor.execute(sql)

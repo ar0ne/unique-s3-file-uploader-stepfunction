@@ -1,5 +1,6 @@
 import os
 from aws_cdk import (
+    Duration,
     Stack,
     aws_lambda as lambda_,
     aws_stepfunctions as sfn,
@@ -12,13 +13,18 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+# DB_PORT = 3306
+# DB_USER = "dbadmin"
+# DB_NAME = "myapp"
+# DB_PASSWORD = ""
+# DB_HOST = ""
 
 dirname = os.path.dirname(__file__)
 
 
 class StepMachineStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, vpc, db_host, db_user, db_password, db_name, db_port, lambda_sg, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # TODO: it's temporary bucket, but we need to determine 'user_id' and 'folder'.
@@ -55,6 +61,30 @@ class StepMachineStack(Stack):
             resources=[s3_bucket.bucket_arn + "/*"],
         )
 
+        db_role = iam.Role(
+            self, "DBLambdaRole", assumed_by=iam.ServicePrincipal("lambda.amazonaws.com")
+        )
+        # lambda_role.add_managed_policy(
+        #     iam.ManagedPolicy.from_aws_managed_policy_name(
+        #         "service-role/AWSLambdaBasicExecutionRole"
+        #     )
+        # )
+        db_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "service-role/AWSLambdaVPCAccessExecutionRole"
+            )
+        )
+        db_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=["rds-db:connect"],
+                resources=[
+                    f"arn:aws:rds:{self.region}:{self.account}:cluster:*",
+                    # f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:*/{DB_USER}"
+                ],
+            )
+        )
+
         get_hash_function = lambda_.Function(
             self,
             "gethashfunction",
@@ -68,7 +98,18 @@ class StepMachineStack(Stack):
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="record_handler.lambda_handler",
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
-            environment={"TABLE_NAME": "Records"},  # TODO
+            environment={
+                "TABLE_NAME": "records",
+                "DB_USER": db_user,
+                "DB_PASSWORD": db_password,
+                "DB_PORT": db_port,
+                "DB_NAME": db_name,
+                "DB_HOST": db_host,
+            },  
+            role=db_role,
+            vpc=vpc,
+            security_groups=[lambda_sg],
+            timeout=Duration.seconds(30),
         )
         delete_object_from_s3_function = lambda_.Function(
             self,
