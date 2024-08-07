@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     aws_s3,
+    aws_ec2 as ec2,
     aws_events,
     aws_iam as iam,
     aws_events_targets,
@@ -13,31 +14,42 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-# DB_PORT = 3306
-# DB_USER = "dbadmin"
-# DB_NAME = "myapp"
-# DB_PASSWORD = ""
-# DB_HOST = ""
 
 dirname = os.path.dirname(__file__)
 
 
 class StepMachineStack(Stack):
 
-    def __init__(self, scope: Construct, construct_id: str, vpc, db_host, db_user, db_password, db_name, db_port, lambda_sg, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        db_host: str,
+        db_user: str,
+        db_password: str,
+        db_name: str,
+        db_port: int,
+        lambda_sg: ec2.SecurityGroup,
+        vpc: ec2.Vpc,
+        lambda_layer: lambda_.LayerVersion,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # TODO: it's temporary bucket, but we need to determine 'user_id' and 'folder'.
         s3_bucket = aws_s3.Bucket(
             self,
             "s3bucket",
             event_bridge_enabled=True,
             removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
 
         # general warehouse for files
         gallery_s3_bucket = aws_s3.Bucket(
-            self, "gallerybucket", removal_policy=RemovalPolicy.DESTROY
+            self,
+            "gallerybucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
 
         read_from_user_s3_bucket_policy = iam.PolicyStatement(
@@ -48,7 +60,7 @@ class StepMachineStack(Stack):
         list_user_s3_bucket_policy = iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:ListBucket"],
-            resources=[s3_bucket.bucket_arn]
+            resources=[s3_bucket.bucket_arn],
         )
         write_to_gallery_s3_bucket_policy = iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
@@ -62,7 +74,9 @@ class StepMachineStack(Stack):
         )
 
         db_role = iam.Role(
-            self, "DBLambdaRole", assumed_by=iam.ServicePrincipal("lambda.amazonaws.com")
+            self,
+            "DBLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
         )
         # lambda_role.add_managed_policy(
         #     iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -87,7 +101,7 @@ class StepMachineStack(Stack):
 
         get_hash_function = lambda_.Function(
             self,
-            "gethashfunction",
+            "GetHashFunction",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="hash_handler.lambda_handler",
             code=lambda_.Code.from_asset(os.path.join(dirname, "../lambda")),
@@ -105,11 +119,12 @@ class StepMachineStack(Stack):
                 "DB_PORT": db_port,
                 "DB_NAME": db_name,
                 "DB_HOST": db_host,
-            },  
+            },
             role=db_role,
             vpc=vpc,
             security_groups=[lambda_sg],
             timeout=Duration.seconds(30),
+            layers=[lambda_layer],
         )
         delete_object_from_s3_function = lambda_.Function(
             self,
@@ -165,22 +180,23 @@ class StepMachineStack(Stack):
             payload_response_only=True,
         )
 
-        unique_file = sfn.Condition.boolean_equals("$.exists", False)
-        record_exists_choice_statement = sfn.Choice(self, "Unique file?")
-        record_exists_choice_statement.when(
-            unique_file,
+        is_unique_file = sfn.Condition.boolean_equals("$.exists", False)
+        record_exists_choice = sfn.Choice(self, "Unique file?")
+        record_exists_choice.when(
+            is_unique_file,
             copy_file.next(delete_file),
         ).otherwise(sfn.Pass(self, "Pass If File Already Exists").next(delete_file))
+
+        chain = file_uploaded.next(create_new_record).next(record_exists_choice)
 
         state_machine = sfn.StateMachine(
             self,
             "UniqueFileStateMachine",
-            definition=file_uploaded.next(create_new_record).next(
-                record_exists_choice_statement
-            ),
+            definition_body=sfn.DefinitionBody.from_chainable(chain),
+            timeout=Duration.minutes(1),
         )
 
-        event_rule = aws_events.Rule(
+        aws_events.Rule(
             self,
             "NewFileEventConsumer",
             description="New file uploaded event",
