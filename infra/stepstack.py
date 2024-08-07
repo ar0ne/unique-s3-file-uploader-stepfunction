@@ -1,5 +1,6 @@
 import os
 from aws_cdk import (
+    CfnOutput,
     Duration,
     Stack,
     aws_lambda as lambda_,
@@ -24,14 +25,15 @@ class StepMachineStack(Stack):
         self,
         scope: Construct,
         construct_id: str,
+        vpc: ec2.Vpc,
         db_host: str,
         db_user: str,
-        db_password: str,
         db_name: str,
         db_port: int,
         lambda_sg: ec2.SecurityGroup,
-        vpc: ec2.Vpc,
+        lambda_role: iam.Role,
         lambda_layer: lambda_.LayerVersion,
+        secret: str,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -73,32 +75,6 @@ class StepMachineStack(Stack):
             resources=[s3_bucket.bucket_arn + "/*"],
         )
 
-        db_role = iam.Role(
-            self,
-            "DBLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-        )
-        # lambda_role.add_managed_policy(
-        #     iam.ManagedPolicy.from_aws_managed_policy_name(
-        #         "service-role/AWSLambdaBasicExecutionRole"
-        #     )
-        # )
-        db_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AWSLambdaVPCAccessExecutionRole"
-            )
-        )
-        db_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["rds-db:connect"],
-                resources=[
-                    f"arn:aws:rds:{self.region}:{self.account}:cluster:*",
-                    # f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:*/{DB_USER}"
-                ],
-            )
-        )
-
         get_hash_function = lambda_.Function(
             self,
             "GetHashFunction",
@@ -115,12 +91,12 @@ class StepMachineStack(Stack):
             environment={
                 "TABLE_NAME": "records",
                 "DB_USER": db_user,
-                "DB_PASSWORD": db_password,
                 "DB_PORT": db_port,
                 "DB_NAME": db_name,
                 "DB_HOST": db_host,
+                "SECRET": secret,
             },
-            role=db_role,
+            role=lambda_role,
             vpc=vpc,
             security_groups=[lambda_sg],
             timeout=Duration.seconds(30),
@@ -207,3 +183,6 @@ class StepMachineStack(Stack):
             ),
             targets=[aws_events_targets.SfnStateMachine(state_machine)],
         )
+
+        CfnOutput(self, "Upload bucket", value=s3_bucket.bucket_name)
+        CfnOutput(self, "File catalog s3 bucket", value=gallery_s3_bucket.bucket_name)

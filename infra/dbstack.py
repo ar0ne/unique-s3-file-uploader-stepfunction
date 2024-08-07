@@ -11,6 +11,7 @@ from aws_cdk import (
     aws_lambda as lambda_,
     custom_resources as cr,
     CfnParameter,
+    RemovalPolicy,
 )
 from constructs import Construct
 
@@ -78,10 +79,10 @@ class DatabaseStack(Stack):
             ),
             credentials=rds.Credentials.from_secret(rds_secret),
             default_database_name=dbname.value_as_string,
-            readers=[
-                # rds.ClusterInstance.provisioned("reader1", promotion_tier=1),
-                rds.ClusterInstance.serverless_v2("reader2"),
-            ],
+            # readers=[
+            #     # rds.ClusterInstance.provisioned("reader1", promotion_tier=1),
+            #     rds.ClusterInstance.serverless_v2("reader2"),
+            # ],
             writer=rds.ClusterInstance.provisioned(
                 "writer",
                 instance_type=ec2.InstanceType.of(
@@ -92,6 +93,7 @@ class DatabaseStack(Stack):
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
             security_groups=[db_sg],
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         proxy_role = iam.Role(
@@ -135,10 +137,12 @@ class DatabaseStack(Stack):
                 effect=iam.Effect.ALLOW,
                 actions=["rds-db:connect"],
                 resources=[
-                    f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:*/{user.value_as_string}"
+                    f"arn:aws:rds-db:{self.region}:{self.account}:dbuser:*/{user.value_as_string}",
+                    f"arn:aws:rds:{self.region}:{self.account}:cluster:*",
                 ],
             )
         )
+        rds_secret.grant_read(lambda_role)
 
         pymysql_layer = lambda_.LayerVersion.from_layer_version_arn(
             self,
@@ -158,9 +162,7 @@ class DatabaseStack(Stack):
                 "DB_USER": user.value_as_string,
                 "DB_NAME": dbname.value_as_string,
                 "DB_PORT": port.value_as_string,
-                "DB_PASSWORD": rds_secret.secret_value_from_json(
-                    "password"
-                ).unsafe_unwrap(),  # TODO: call SM in lambda instead
+                "SECRET": rds_secret.secret_arn,
             },
             vpc=vpc,
             role=lambda_role,
@@ -185,7 +187,8 @@ class DatabaseStack(Stack):
         self.db_port = port.value_as_string
         self.db_host = proxy.endpoint
         self.db_name = dbname.value_as_string
-        self.db_password = rds_secret.secret_value_from_json("password").unsafe_unwrap()
+        self.secret = rds_secret.secret_arn
         self.lambda_sg = lambda_sg
         self.vpc = vpc
         self.lambda_layer = pymysql_layer
+        self.lambda_role = lambda_role
