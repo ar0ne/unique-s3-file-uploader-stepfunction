@@ -16,7 +16,7 @@ Firstly, some of Lambda functions require additional library (`PyMySQL`) to inte
 
 
 ```
-cdk deploy --all
+cdk deploy --all -require-approval never
 ```
 
 If you want to override some parameters, you could use `--parameters`:
@@ -24,3 +24,13 @@ If you want to override some parameters, you could use `--parameters`:
 ```
 cdk deploy DatabaseStack --parameters DB_USER=myadmin --parameters DB_NAME=superapp
 ```
+
+After successful deployment you could trigger the flow by uploading file to `UploadBucket` on S3 (see outputs).
+
+```
+echo "hello world" | aws s3 cp - s3://<upload-bucket-name>
+```
+
+Also you could check Step Function execution, if you upload same file twice it should reuse `file_id` from database.
+
+

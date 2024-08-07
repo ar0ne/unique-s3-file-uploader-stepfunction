@@ -2,6 +2,9 @@ import os
 import boto3
 import logging
 import pymysql
+import json
+
+from utils import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -10,23 +13,24 @@ FIND_RECORD_WITH_HASH = "SELECT file_id FROM `files` WHERE `hash` =%s LIMIT 1;"
 CREATE_NEW_RECORD = "INSERT INTO `records` (user_id, file_id, filename, folder) VALUES (%s, %s, %s, %s);"
 CREATE_NEW_FILE = "INSERT INTO `files` (hash, algorithm) VALUES (%s, %s);"
 
-sm_client = boto3.client("secretsmanager")
+dirname = os.path.dirname(__file__)
 
-password = sm_client.get_secret_value(SecretId=os.environ["SECRET"])["SecretString"]
 
-connection = pymysql.connect(
-    host=os.environ["DB_HOST"],
-    user=os.environ["DB_USER"],
-    password=password,
-    database=os.environ["DB_NAME"],
-    charset="utf8mb4",
-    cursorclass=pymysql.cursors.DictCursor,
-)
+secret = json.loads(get_secret(os.environ["SECRET"]))
+password = secret["password"]
 
 
 def lambda_handler(event, context):
     logger.info("Create new record in DB and check if file hash exists in table")
 
+    connection = pymysql.connect(
+        host=os.environ["DB_HOST"],
+        user=os.environ["DB_USER"],
+        password=password,
+        database=os.environ["DB_NAME"],
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+    )
     file_id = None
     file_exists = False
     with connection:

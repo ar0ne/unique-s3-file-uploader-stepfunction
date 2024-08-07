@@ -16,7 +16,7 @@ from aws_cdk import (
 from constructs import Construct
 
 
-LAYER_ARN = "arn:aws:lambda:{region}:{account}:layer:pymysql-layer"
+LAYER_ARN = "arn:aws:lambda:{region}:{account}:layer:pymysql-layer:4"
 
 
 dirname = os.path.dirname(__file__)
