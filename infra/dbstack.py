@@ -184,7 +184,7 @@ class DatabaseStack(Stack):
         resource.node.add_dependency(proxy)
 
         self.db_user = user.value_as_string
-        self.db_port = port.value_as_string
+        self.db_port = port.value_as_number
         self.db_host = proxy.endpoint
         self.db_name = dbname.value_as_string
         self.secret = rds_secret.secret_arn

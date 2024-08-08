@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 import aws_cdk as cdk
 
-from infra.stepstack import StepMachineStack
+from infra.smstack import StateMachineStack
 from infra.dbstack import DatabaseStack
 
 
 app = cdk.App()
 db_stack = DatabaseStack(app, "DatabaseStack")
-sm_stack = StepMachineStack(
+sm_stack = StateMachineStack(
     app, 
-    "StepMachineStack", 
+    "StateMachineStack", 
     vpc=db_stack.vpc, 
     lambda_sg=db_stack.lambda_sg, 
     lambda_role=db_stack.lambda_role,

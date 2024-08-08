@@ -19,7 +19,7 @@ from constructs import Construct
 dirname = os.path.dirname(__file__)
 
 
-class StepMachineStack(Stack):
+class StateMachineStack(Stack):
 
     def __init__(
         self,
@@ -91,7 +91,7 @@ class StepMachineStack(Stack):
             environment={
                 "TABLE_NAME": "records",
                 "DB_USER": db_user,
-                "DB_PORT": db_port,
+                "DB_PORT": str(db_port),
                 "DB_NAME": db_name,
                 "DB_HOST": db_host,
                 "SECRET": secret,
